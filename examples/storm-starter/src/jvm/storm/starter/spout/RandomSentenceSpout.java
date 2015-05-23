@@ -27,6 +27,7 @@ import backtype.storm.utils.Utils;
 
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 public class RandomSentenceSpout extends BaseRichSpout {
   SpoutOutputCollector _collector;
@@ -45,7 +46,7 @@ public class RandomSentenceSpout extends BaseRichSpout {
     String[] sentences = new String[]{ "the cow jumped over the moon", "an apple a day keeps the doctor away",
         "four score and seven years ago", "snow white and the seven dwarfs", "i am at two with nature" };
     String sentence = sentences[_rand.nextInt(sentences.length)];
-    _collector.emit(new Values(sentence));
+    _collector.emit(new Values(sentence), UUID.randomUUID());
   }
 
   @Override

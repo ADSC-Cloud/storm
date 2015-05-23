@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import storm
+import time
 
 class SplitSentenceBolt(storm.BasicBolt):
     def process(self, tup):
+        time.sleep(0.05)
         words = tup.values[0].split(" ")
         for word in words:
           storm.emit([word])
