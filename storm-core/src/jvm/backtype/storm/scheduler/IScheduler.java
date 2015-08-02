@@ -17,6 +17,7 @@
  */
 package backtype.storm.scheduler;
 
+import java.util.List;
 import java.util.Map;
 
 
@@ -24,6 +25,11 @@ public interface IScheduler {
     
     void prepare(Map conf);
     
+    default Map<ExecutorDetails, String> computeExecutors(GeneralTopologyDetails topoDetails,
+                                                          List<ComponentDetails> compDetails) {
+        return Util.computeExecutors(compDetails);
+    }
+
     /**
      * Set assignments for the topologies which needs scheduling. The new assignments is available 
      * through <code>cluster.getAssignments()</code>

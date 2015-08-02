@@ -17,8 +17,8 @@
   (:use [backtype.storm util config log])
   (:require [backtype.storm.scheduler.DefaultScheduler :as DefaultScheduler])
   (:import [java.util HashSet Set List LinkedList ArrayList Map HashMap])
-  (:import [backtype.storm.scheduler IScheduler Topologies
-            Cluster TopologyDetails WorkerSlot SchedulerAssignment
+  (:import [backtype.storm.scheduler IScheduler Topologies Util
+            Cluster TopologyDetails WorkerSlot SchedulerAssignment GeneralTopologyDetails
             EvenScheduler ExecutorDetails])
   (:gen-class
     :init init
@@ -217,3 +217,6 @@
         ))
     (.setBlacklistedHosts cluster orig-blacklist)
     ))
+
+(defn -computeExecutors [this ^GeneralTopologyDetails topoDetails ^List compDetails]
+  (Util/computeExecutors compDetails))

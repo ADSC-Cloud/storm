@@ -463,11 +463,13 @@
                    :factory? false
                    :start true
                    :thread-name nil]
-  (let [thread (Thread.
+  (let [interrupted (atom false)
+        thread (Thread.
                  (fn []
                    (try-cause
                      (let [afn (if factory? (afn) afn)]
                        (loop []
+                         (if @interrupted (throw (InterruptedException.)))
                          (let [sleep-time (afn)]
                            (when-not (nil? sleep-time)
                              (sleep-secs sleep-time)
@@ -492,6 +494,7 @@
         (.start thread))
       (join
         [this]
+        (reset! interrupted true)
         (.join thread))
       (interrupt
         [this]

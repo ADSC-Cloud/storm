@@ -29,7 +29,8 @@
                                ^MultiCountMetric execute-count
                                ^MultiReducedMetric execute-latency
                                ^MultiCountMetric emit-count
-                               ^MultiCountMetric transfer-count])
+                               ^MultiCountMetric transfer-count
+                               ^MultiReducedMetric transfer-latency])
 
 (defn make-data [executor-type]
   (condp = executor-type
@@ -44,7 +45,8 @@
                                (MultiCountMetric.)
                                (MultiReducedMetric. (MeanReducer.))
                                (MultiCountMetric.)
-                               (MultiCountMetric.))))
+                               (MultiCountMetric.)
+                               (MultiReducedMetric. (MeanReducer.)))))
 
 (defn register-all [builtin-metrics  storm-conf topology-context]
   (doseq [[kw imetric] builtin-metrics]
@@ -93,6 +95,10 @@
 (defn bolt-failed-tuple! [^BuiltinBoltMetrics m stats comp-id stream]
   (let [scope (str comp-id ":" stream)]    
     (-> m .fail-count (.scope scope) (.incrBy (stats-rate stats)))))
+
+(defn tuple-transfer-latency! [^BuiltinBoltMetrics m comp-id stream latency-ms]
+  (let [scope (str comp-id ":" stream)]
+    (-> m .transfer-latency (.scope scope) (.update latency-ms))))
 
 (defn emitted-tuple! [m stats stream]
   (-> m :emit-count (.scope stream) (.incrBy (stats-rate stats))))

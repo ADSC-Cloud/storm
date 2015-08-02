@@ -65,6 +65,8 @@ public class TupleImpl extends IndifferentAccessMap implements Seqable, Indexed,
     
     Long _processSampleStartTime = null;
     Long _executeSampleStartTime = null;
+
+    Long _transferSampleStartTime = null;
     
     public void setProcessSampleStartTime(long ms) {
         _processSampleStartTime = ms;
@@ -80,6 +82,14 @@ public class TupleImpl extends IndifferentAccessMap implements Seqable, Indexed,
 
     public Long getExecuteSampleStartTime() {
         return _executeSampleStartTime;
+    }
+
+    public Long getTransferSampleStartTime() {
+        return _transferSampleStartTime;
+    }
+
+    public void setTransferSampleStartTime(Long ms) {
+        _transferSampleStartTime = ms;
     }
     
     long _outAckVal = 0;

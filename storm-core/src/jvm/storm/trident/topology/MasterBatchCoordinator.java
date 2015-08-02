@@ -18,12 +18,16 @@
 package storm.trident.topology;
 
 import backtype.storm.Config;
+import backtype.storm.metric.api.CountMetric;
+import backtype.storm.metric.api.MeanReducer;
+import backtype.storm.metric.api.ReducedMetric;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.topology.base.BaseRichSpout;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
+import backtype.storm.utils.Utils;
 import backtype.storm.utils.WindowedTimeThrottler;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,6 +65,9 @@ public class MasterBatchCoordinator extends BaseRichSpout {
     
     List<ITridentSpout.BatchCoordinator> _coordinators = new ArrayList();
     
+    private ReducedMetric avgWaittingTime;
+    private ReducedMetric activeTxCount;
+    private CountMetric commitWaittingCount;
     
     List<String> _managedSpoutIds;
     List<ITridentSpout> _spouts;
@@ -92,7 +99,7 @@ public class MasterBatchCoordinator extends BaseRichSpout {
         
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
-        _throttler = new WindowedTimeThrottler((Number)conf.get(Config.TOPOLOGY_TRIDENT_BATCH_EMIT_INTERVAL_MILLIS), 1);
+        _throttler = new WindowedTimeThrottler((Number)conf.get(Config.TOPOLOGY_TRIDENT_BATCH_EMIT_INTERVAL_MILLIS), Integer.MAX_VALUE);
         for(String spoutId: _managedSpoutIds) {
             _states.add(TransactionalState.newCoordinatorState(conf, spoutId));
         }
@@ -106,6 +113,12 @@ public class MasterBatchCoordinator extends BaseRichSpout {
             _maxTransactionActive = active.intValue();
         }
         _attemptIds = getStoredCurrAttempts(_currTransaction, _maxTransactionActive);
+        avgWaittingTime = context.registerMetric("commit-wait-ms", new ReducedMetric(new MeanReducer()),
+                Utils.getInt(conf.get(Config.TOPOLOGY_BUILTIN_METRICS_BUCKET_SIZE_SECS)));
+        commitWaittingCount = context.registerMetric("commit-wait-cnt", new CountMetric(),
+                Utils.getInt(conf.get(Config.TOPOLOGY_BUILTIN_METRICS_BUCKET_SIZE_SECS)));
+        activeTxCount = context.registerMetric("active-tx-cnt", new ReducedMetric(new MeanReducer()),
+                Utils.getInt(conf.get(Config.TOPOLOGY_BUILTIN_METRICS_BUCKET_SIZE_SECS)));
 
         
         for(int i=0; i<_spouts.size(); i++) {
@@ -133,6 +146,10 @@ public class MasterBatchCoordinator extends BaseRichSpout {
         if(status!=null && tx.equals(status.attempt)) {
             if(status.status==AttemptStatus.PROCESSING) {
                 status.status = AttemptStatus.PROCESSED;
+                if (tx.getTransactionId() != _currTransaction) {
+                    commitWaittingCount.incr();
+                    status.processedTime = System.currentTimeMillis();
+                }
             } else if(status.status==AttemptStatus.COMMITTING) {
                 _activeTx.remove(tx.getTransactionId());
                 _attemptIds.remove(tx.getTransactionId());
@@ -173,6 +190,9 @@ public class MasterBatchCoordinator extends BaseRichSpout {
         TransactionStatus maybeCommit = _activeTx.get(_currTransaction);
         if(maybeCommit!=null && maybeCommit.status == AttemptStatus.PROCESSED) {
             maybeCommit.status = AttemptStatus.COMMITTING;
+            if (maybeCommit.processedTime > 0) {
+                avgWaittingTime.update(System.currentTimeMillis() - maybeCommit.processedTime);
+            }
             _collector.emit(COMMIT_STREAM_ID, new Values(maybeCommit.attempt), maybeCommit.attempt);
         }
         
@@ -199,8 +219,10 @@ public class MasterBatchCoordinator extends BaseRichSpout {
                         _activeTx.put(curr, new TransactionStatus(attempt));
                         _collector.emit(BATCH_STREAM_ID, new Values(attempt), attempt);
                         _throttler.markEvent();
+                        break;
                     }
                     curr = nextTransactionId(curr);
+                    activeTxCount.update(_activeTx.size());
                 }
             }
         }
@@ -232,6 +254,8 @@ public class MasterBatchCoordinator extends BaseRichSpout {
     private static class TransactionStatus {
         TransactionAttempt attempt;
         AttemptStatus status;
+
+        long processedTime = -1;
         
         public TransactionStatus(TransactionAttempt attempt) {
             this.attempt = attempt;

@@ -5,8 +5,8 @@
   (:require [clojure.set :as set])
   (:import [backtype.storm.utils Utils])
   (:import [java.util HashSet Set List LinkedList ArrayList Map HashMap])
-  (:import [backtype.storm.scheduler IScheduler Topologies
-            Cluster TopologyDetails WorkerSlot SchedulerAssignment
+  (:import [backtype.storm.scheduler IScheduler Topologies Util
+            Cluster TopologyDetails WorkerSlot SchedulerAssignment GeneralTopologyDetails
             EvenScheduler ExecutorDetails])
   (:gen-class
     :init init
@@ -119,3 +119,6 @@
                                     (ExecutorDetails. start-task end-task))]]
             (.assign cluster slot topology-id executors)))
         (DefaultScheduler/default-schedule (Topologies. {topology-id topology}) cluster)))))
+
+(defn -computeExecutors [this ^GeneralTopologyDetails topoDetails ^List compDetails]
+  (Util/computeExecutors compDetails))

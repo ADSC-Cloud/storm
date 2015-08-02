@@ -187,6 +187,9 @@
 (defn mk-executor-transfer-fn [batch-transfer->worker storm-conf]
   (fn this
     ([task tuple block? ^ConcurrentLinkedQueue overflow-buffer]
+      ;record time when tuple enter into the queue, skip system messages
+      (if-not (Utils/isSystemId (.getSourceStreamId tuple))
+        (.setTransferSampleStartTime tuple (System/currentTimeMillis)))
       (when (= true (storm-conf TOPOLOGY-DEBUG))
         (log-message "TRANSFERING tuple TASK: " task " TUPLE: " tuple))
       (if (and overflow-buffer (not (.isEmpty overflow-buffer)))
@@ -210,7 +213,8 @@
         component-id (.getComponentId worker-context (first task-ids))
         storm-conf (normalized-component-conf (:storm-conf worker) worker-context component-id)
         executor-type (executor-type worker-context component-id)
-        batch-transfer->worker (disruptor/disruptor-queue
+        batch-transfer->worker (disruptor/disruptor-traced-queue
+                                 storm-conf
                                   (str "executor"  executor-id "-send-queue")
                                   (storm-conf TOPOLOGY-EXECUTOR-SEND-BUFFER-SIZE)
                                   :claim-strategy :single-threaded
@@ -625,6 +629,11 @@
     (if ms
       (time-delta-ms ms))))
 
+(defn- tuple-transfer-time-delta! [^TupleImpl tuple]
+  (let [ms (.getTransferSampleStartTime tuple)]
+    (if ms
+      (time-delta-ms ms))))
+
 (defn put-xor! [^Map pending key id]
   (let [curr (or (.get pending key) (long 0))]
     (.put pending key (bit-xor curr id))))
@@ -667,6 +676,12 @@
                                     sampler? (sampler)
                                     execute-sampler? (execute-sampler)
                                     now (if (or sampler? execute-sampler?) (System/currentTimeMillis))]
+                                (let [delta (tuple-transfer-time-delta! tuple)]
+                                  (when delta
+                                    (builtin-metrics/tuple-transfer-latency! (:builtin-metrics task-data)
+                                      (.getSourceComponent tuple)
+                                      (.getSourceStreamId tuple)
+                                      delta)))
                                 (when sampler?
                                   (.setProcessSampleStartTime tuple now))
                                 (when execute-sampler?

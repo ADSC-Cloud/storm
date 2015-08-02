@@ -16,6 +16,7 @@
 (ns backtype.storm.daemon.supervisor
   (:import [java.io OutputStreamWriter BufferedWriter IOException])
   (:import [backtype.storm.scheduler ISupervisor]
+           [backtype.storm.utils FileServer Utils]
            [java.net JarURLConnection]
            [java.net URI])
   (:use [backtype.storm bootstrap])
@@ -162,6 +163,14 @@
               ))
      )))
 
+(defn- limit-worker-cpu [conf id]
+  (let [pids (read-dir-contents (worker-pids-root conf id))
+        limit (conf "worker.cpu.limit")]
+    (when limit
+      (doseq [pid pids]
+        (log-message "limit cpu percentage " limit " for worker " id)
+        (launch-process (str "cpulimit -z -l " limit " -p " pid))))))
+
 (defn- wait-for-worker-launch [conf id start-time]
   (let [state (worker-state conf id)]    
     (loop []
@@ -176,7 +185,8 @@
           (Time/sleep 500)
           (recur)
           )))
-    (when-not (.get state LS-WORKER-HEARTBEAT)
+    (if (.get state LS-WORKER-HEARTBEAT)
+      (limit-worker-cpu conf id)
       (log-message "Worker " id " failed to start")
       )))
 
@@ -712,10 +722,12 @@
       ))
 
 (defn -launch [supervisor]
-  (let [conf (read-storm-config)]
+  (let [conf (read-storm-config)
+        file-server-port (Utils/getInt (conf "file-server.port"))]
     (validate-distributed-mode! conf)
     (let [supervisor (mk-supervisor conf nil supervisor)]
-      (add-shutdown-hook-with-force-kill-in-1-sec #(.shutdown supervisor)))))
+      (add-shutdown-hook-with-force-kill-in-1-sec #(.shutdown supervisor)))
+    (.start (FileServer. file-server-port (str (conf STORM-LOCAL-DIR) file-path-separator "data")))))
 
 (defn standalone-supervisor []
   (let [conf-atom (atom nil)

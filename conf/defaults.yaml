@@ -124,6 +124,7 @@ supervisor.enable: true
 supervisor.supervisors: []
 supervisor.supervisors.commands: []
 
+file-server.port: 19888
 
 ### worker.* configs are for task workers
 worker.childopts: "-Xmx768m"

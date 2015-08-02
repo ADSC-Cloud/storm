@@ -202,7 +202,7 @@
         <guava.version>16.0.1</guava.version>
         <logback-classic.version>1.0.13</logback-classic.version>
         <log4j-over-slf4j.version>1.6.6</log4j-over-slf4j.version>
-        <netty.version>3.9.0.Final</netty.version>
+        <netty.version>3.9.2.Final</netty.version>
         <clojure.tools.nrepl.version>0.2.3</clojure.tools.nrepl.version>
         <clojure-complete.version>0.2.3</clojure-complete.version>
         <mockito.version>1.9.5</mockito.version>
@@ -645,8 +645,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>1.6</source>
-                    <target>1.6</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
             <plugin>

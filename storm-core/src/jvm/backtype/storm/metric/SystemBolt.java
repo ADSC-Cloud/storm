@@ -43,6 +43,10 @@ public class SystemBolt implements IBolt {
     private static Logger LOG = LoggerFactory.getLogger(SystemBolt.class);
     private static boolean _prepareWasCalled = false;
 
+    public static synchronized void reset() {
+        _prepareWasCalled = false;
+    }
+
     private static class MemoryUsageMetric implements IMetric {
         IFn _getUsage;
         public MemoryUsageMetric(IFn getUsage) {

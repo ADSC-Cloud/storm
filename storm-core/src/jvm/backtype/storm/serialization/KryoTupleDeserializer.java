@@ -51,7 +51,12 @@ public class KryoTupleDeserializer implements ITupleDeserializer {
             String streamName = _ids.getStreamName(componentName, streamId);
             MessageId id = MessageId.deserialize(_kryoInput);
             List<Object> values = _kryo.deserializeFrom(_kryoInput);
-            return new TupleImpl(_context, values, taskId, streamName, id);
+            TupleImpl tuple = new TupleImpl(_context, values, taskId, streamName, id);
+            long transferStartTime = _kryoInput.readLong(true);
+            if (transferStartTime != -1) {
+                tuple.setTransferSampleStartTime(transferStartTime);
+            }
+            return tuple;
         } catch(IOException e) {
             throw new RuntimeException(e);
         }

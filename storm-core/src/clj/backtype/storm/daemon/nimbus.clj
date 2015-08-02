@@ -19,6 +19,7 @@
   (:import [java.io FileNotFoundException])
   (:import [java.nio.channels Channels WritableByteChannel])
   (:import [backtype.storm.security.auth ThriftServer ThriftConnectionType ReqContext AuthUtils])
+  (:import [backtype.storm.scheduler GeneralTopologyDetails ComponentDetails])
   (:use [backtype.storm.scheduler.DefaultScheduler])
   (:import [backtype.storm.scheduler INimbus SupervisorDetails WorkerSlot TopologyDetails
             Cluster Topologies SchedulerAssignment SchedulerAssignmentImpl DefaultScheduler ExecutorDetails])
@@ -76,6 +77,7 @@
      :submit-lock (Object.)
      :cred-update-lock (Object.)
      :heartbeats-cache (atom {})
+     :executor-cache (atom {}) ;cache topology->executor->component
      :downloaders (file-cache-map conf)
      :uploaders (file-cache-map conf)
      :uptime (uptime-computer)
@@ -336,9 +338,9 @@
         storm-base (.storm-base (:storm-cluster-state nimbus) storm-id nil)
         topology-conf (read-storm-conf conf storm-id)
         topology (read-storm-topology conf storm-id)
-        executor->component (->> (compute-executor->component nimbus storm-id)
-                                 (map-key (fn [[start-task end-task]]
-                                            (ExecutorDetails. (int start-task) (int end-task)))))]
+        cached-executor->component (@(:executor-cache nimbus) storm-id)
+        executor->component (if cached-executor->component cached-executor->component
+                              (compute-executor->component nimbus storm-id (GeneralTopologyDetails. topology-conf topology storm-id)))]
     (TopologyDetails. storm-id
                       topology-conf
                       topology
@@ -425,38 +427,25 @@
 (defn- to-executor-id [task-ids]
   [(first task-ids) (last task-ids)])
 
-(defn- compute-executors [nimbus storm-id]
+(defn- compute-executor->component [nimbus storm-id topology-details]
   (let [conf (:conf nimbus)
         storm-base (.storm-base (:storm-cluster-state nimbus) storm-id nil)
         component->executors (:component->executors storm-base)
-        storm-conf (read-storm-conf conf storm-id)
-        topology (read-storm-topology conf storm-id)
-        task->component (storm-task-info topology storm-conf)]
-    (->> (storm-task-info topology storm-conf)
-         reverse-map
-         (map-val sort)
-         (join-maps component->executors)
-         (map-val (partial apply partition-fixed))
-         (mapcat second)
-         (map to-executor-id)
-         )))
+        storm-conf (.getConf topology-details)
+        component->tasks (->> (storm-task-info (.getTopology topology-details) storm-conf) reverse-map)
+        component-details (into [] (for [[comp tasks] component->tasks]
+                                     (ComponentDetails. comp (component->executors comp) tasks)))
+        executor->component (.computeExecutors (:scheduler nimbus) topology-details component-details)]
+    (swap! (:executor-cache nimbus) assoc storm-id executor->component)
+    executor->component))
 
-(defn- compute-executor->component [nimbus storm-id]
-  (let [conf (:conf nimbus)
-        executors (compute-executors nimbus storm-id)
-        topology (read-storm-topology conf storm-id)
-        storm-conf (read-storm-conf conf storm-id)
-        task->component (storm-task-info topology storm-conf)
-        executor->component (into {} (for [executor executors
-                                           :let [start-task (first executor)
-                                                 component (task->component start-task)]]
-                                       {executor component}))]
-        executor->component))
-
-(defn- compute-topology->executors [nimbus storm-ids]
+(defn- compute-topology->executors [nimbus topologies storm-ids]
   "compute a topology-id -> executors map"
-  (into {} (for [tid storm-ids]
-             {tid (set (compute-executors nimbus tid))})))
+  (into {} (for [tid storm-ids
+                 :let [topoDetails (.getById topologies tid)
+                       executors (.getExecutors topoDetails)
+                       converted-executors (into #{} (for [e executors] [(.getStartTask e) (.getEndTask e)]))]]
+             {tid converted-executors})))
 
 (defn- compute-topology->alive-executors [nimbus existing-assignments topologies topology->executors scratch-topology-id]
   "compute a topology-id -> alive executors map"
@@ -560,7 +549,7 @@
 (defn compute-new-topology->executor->node+port [nimbus existing-assignments topologies scratch-topology-id]
   (let [conf (:conf nimbus)
         storm-cluster-state (:storm-cluster-state nimbus)
-        topology->executors (compute-topology->executors nimbus (keys existing-assignments))
+        topology->executors (compute-topology->executors nimbus topologies (keys existing-assignments))
         ;; update the executors heartbeats first.
         _ (update-all-heartbeats! nimbus existing-assignments topology->executors)
         topology->alive-executors (compute-topology->alive-executors nimbus
@@ -661,6 +650,8 @@
         ^INimbus inimbus (:inimbus nimbus) 
         ;; read all the topologies
         topology-ids (.active-storms storm-cluster-state)
+        ;; remove old computed topology executors from cache
+        _ (if scratch-topology-id (swap! (:executor-cache nimbus) dissoc scratch-topology-id))
         topologies (into {} (for [tid topology-ids]
                               {tid (read-topology-details nimbus tid)}))
         topologies (Topologies. topologies)
@@ -858,7 +849,8 @@
           (.teardown-heartbeats! storm-cluster-state id)
           (.teardown-topology-errors! storm-cluster-state id)
           (rmr (master-stormdist-root conf id))
-          (swap! (:heartbeats-cache nimbus) dissoc id))
+          (swap! (:heartbeats-cache nimbus) dissoc id)
+          (swap! (:executor-cache nimbus) dissoc id))
         ))))
 
 (defn- file-older-than? [now seconds file]

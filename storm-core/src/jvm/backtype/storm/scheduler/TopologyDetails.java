@@ -25,17 +25,12 @@ import backtype.storm.Config;
 import backtype.storm.generated.StormTopology;
 
 
-public class TopologyDetails {
-    String topologyId;
-    Map topologyConf;
-    StormTopology topology;
+public class TopologyDetails extends GeneralTopologyDetails {
     Map<ExecutorDetails, String> executorToComponent;
     int numWorkers;
  
     public TopologyDetails(String topologyId, Map topologyConf, StormTopology topology, int numWorkers) {
-        this.topologyId = topologyId;
-        this.topologyConf = topologyConf;
-        this.topology = topology;
+        super(topologyConf, topology, topologyId);
         this.numWorkers = numWorkers;
     }
     
@@ -47,24 +42,8 @@ public class TopologyDetails {
         }
     }
     
-    public String getId() {
-        return topologyId;
-    }
-    
-    public String getName() {
-        return (String)this.topologyConf.get(Config.TOPOLOGY_NAME);
-    }
-    
-    public Map getConf() {
-        return topologyConf;
-    }
-    
     public int getNumWorkers() {
         return numWorkers;
-    }
-    
-    public StormTopology getTopology() {
-        return topology;
     }
 
     public Map<ExecutorDetails, String> getExecutorToComponent() {
