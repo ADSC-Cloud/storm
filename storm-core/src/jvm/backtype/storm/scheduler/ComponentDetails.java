@@ -13,7 +13,7 @@ public class ComponentDetails {
     public ComponentDetails(String componentId, int numExecutors, Collection<Integer> tasks) {
         this.componentId = componentId;
         this.numExecutors = numExecutors;
-        this.tasks = tasks.stream().mapToInt(i -> i).sorted().toArray();
+        this.tasks = tasks.stream().mapToInt((Number i) -> i.intValue()).sorted().toArray();
     }
 
     public String getComponentId() {
