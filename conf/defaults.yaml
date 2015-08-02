@@ -203,4 +203,3 @@ topology.temp.connection.timeout.secs: 5
 
 dev.zookeeper.path: "/tmp/dev-storm-zookeeper"
 
-storm.scheduler: "backtype.storm.scheduler.MigrationScheduler"
