@@ -1,5 +1,6 @@
 package backtype.storm.scheduler;
 
+import java.util.Arrays;
 import java.util.Collection;
 
 /**
@@ -13,7 +14,12 @@ public class ComponentDetails {
     public ComponentDetails(String componentId, int numExecutors, Collection<Integer> tasks) {
         this.componentId = componentId;
         this.numExecutors = numExecutors;
-        this.tasks = tasks.stream().mapToInt((Number i) -> i.intValue()).sorted().toArray();
+        this.tasks = new int[tasks.size()];
+        int i = 0;
+        for (int t : tasks) {
+            this.tasks[i++] = t;
+        }
+        Arrays.sort(this.tasks);
     }
 
     public String getComponentId() {
